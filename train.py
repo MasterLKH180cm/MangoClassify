@@ -130,8 +130,8 @@ def main(args):
     ''' load dataset and prepare data loader '''
     
     print('===> loading data')
-    train_set = MyDataset(r'E:\ACV\mango', 'C1-P1_Train', 'train.csv','train')
-    test_set = MyDataset(r'E:\ACV\mango', 'C1-P1_Dev', 'dev.csv','test')
+    train_set = MyDataset(r'E:\ACV\MangoClassify', 'C1-P1_Train', 'train.csv','train')
+    test_set = MyDataset(r'E:\ACV\MangoClassify', 'C1-P1_Dev', 'dev.csv','test')
 #    print(train_set[0])
     train_loss = []
     print('===> build dataloader ...')
