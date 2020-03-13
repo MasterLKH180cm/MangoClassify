@@ -40,12 +40,12 @@ class CNN(nn.Module):
 #        for p in self.net.parameters():
 #            p.requires_grad = False
 #        self.bn1 = nn.BatchNorm2d(3)
-#        self.bn2 = nn.BatchNorm1d(512)
-        self.fc1 = nn.Linear(512, 512)
-        self.fc2 = nn.Linear(512, 512)
-#        self.fc3 = nn.Linear(512, 512)
-#        self.fc4 = nn.Linear(512, 512)
-        self.fc5 = nn.Linear(512, 3)
+        self.bn2 = nn.BatchNorm1d(512)
+        self.fc1 = nn.Linear(512, 1024)
+        self.fc2 = nn.Linear(1024, 1024)
+#        self.fc3 = nn.Linear(1024, 1024)
+#        self.fc4 = nn.Linear(1024, 1024)
+        self.fc5 = nn.Linear(1024, 3)
         self.prelu1 = nn.PReLU()
         self.prelu2 = nn.PReLU()
 #        self.prelu3 = nn.PReLU()
@@ -57,7 +57,7 @@ class CNN(nn.Module):
 #        BatchSize = x.shape[0]
 #        x = self.bn1(x)
         x = self.net(x).squeeze()#.view(BatchSize,-1)
-#        x = self.bn2(x)
+        x = self.bn2(x)
         x = self.prelu1(self.fc1(x))
         x = self.prelu2(self.fc2(x))
 #        x = self.prelu3(self.fc3(x))
@@ -76,15 +76,15 @@ def arg_parse():
     # training parameters
     parser.add_argument('--gpu', default=0, type=int, 
                     help='In homework, please always set to 0')
-    parser.add_argument('--epoch', default=50, type=int,
+    parser.add_argument('--epoch', default=100, type=int,
                     help="num of validation iterations")
     parser.add_argument('--val_epoch', default=1, type=int,
                     help="num of validation iterations")
-    parser.add_argument('--train_batch', default=16, type=int,
+    parser.add_argument('--train_batch', default=32, type=int,
                     help="train batch size")
     parser.add_argument('--test_batch', default=16, type=int, 
                     help="test batch size")
-    parser.add_argument('--lr', default=0.001, type=float,
+    parser.add_argument('--lr', default=0.0001, type=float,
                     help="initial learning rate")
     parser.add_argument('--weight-decay', default=0.001, type=float,
                     help="initial learning rate")
@@ -123,9 +123,10 @@ def main(args):
     
     
     best_acc = 0
+    best_recall = 0
     train_loss=[]
-    
-    total_acc = []
+    total_wrecall = [0]
+    total_acc = [0]
     
     ''' load dataset and prepare data loader '''
     
@@ -190,6 +191,12 @@ def main(args):
             
             correct = 0
             total = 0
+            tp_A = 0
+            tp_B = 0
+            tp_C = 0
+            fn_A = 0
+            fn_B = 0
+            fn_C = 0
 #            loss = 0
             for idx, (imgs, label) in enumerate(test_loader):
                 imgs = imgs.permute(0, 3 ,1, 2).to(device, dtype = torch.float)
@@ -199,25 +206,37 @@ def main(args):
 #                torch.cuda.empty_cache()
 #                loss += criterion(output, gt).item()
                 a, b, c, d, e, f, g, h, i = confusion_matrix(label.detach().numpy(),pred.argmax(-1).cpu().detach().numpy()).ravel()
-                
+                tp_A += a
+                fn_A += (a + b + c)
+                tp_B += e
+                fn_B += (e + d + f)
+                tp_C += i
+                fn_C += (i + g + h)
                 correct += (a+e+i)
                 total += len(label)
             acc = correct / total
+            w_recall = ((tp_A/fn_A) + (tp_B/fn_B) + (tp_B/fn_B)) / 3
+            total_wrecall += [w_recall]
             total_acc += [acc]
             test_info += 'Acc:{:.8f} '.format(acc)
+            test_info += 'Recall:{:.8f} '.format(w_recall)
             
             print(test_info)
 #            print(tn, fp, fn, tp)
         
             ''' save best model '''
+            if w_recall > best_recall:
+                best_recall = w_recall
+                save_model(model, os.path.join(args.save_dir, 'model_best_recall.h5'))
+                
             if acc > best_acc:
-                save_model(model, os.path.join(args.save_dir, 'model_best.h5'))
-#                best_loss = loss
                 best_acc = acc
+                save_model(model, os.path.join(args.save_dir, 'model_best_acc.h5'))
+                
                 
     
         ''' save model '''
-        save_model(model, os.path.join(args.save_dir, 'model_{}.h5'.format(epoch)))
+        save_model(model, os.path.join(args.save_dir, 'model_{}_acc={:8f}_recall={:8f}.h5'.format(epoch,acc,w_recall)))
         
     plt.figure()
     plt.plot(range(1,len(train_loss)+1),train_loss,'-')
@@ -225,12 +244,19 @@ def main(args):
     plt.ylabel("loss")
     plt.title("training loss")
     plt.show()
+    
     plt.figure()
     plt.plot(range(1,len(total_acc)+1),total_acc,'-')
-
     plt.xlabel("Epoch")
     plt.ylabel("Accuracy")
     plt.title("Best Accuracy:" + str(best_acc))
+    plt.show()
+    
+    plt.figure()
+    plt.plot(range(1,len(total_wrecall)+1),total_wrecall,'-')
+    plt.xlabel("Epoch")
+    plt.ylabel("Recall")
+    plt.title("Best Recall:" + str(best_recall))
     plt.show()
 
 
@@ -245,7 +271,7 @@ class MyDataset(Dataset):
         self.csv = csv
         self.img_file = os.path.join(dir_path, img_file)
         with open(os.path.join(self.dir_path,self.csv),'rb') as f:
-            self.img_label_file = pd.read_csv(f, header=None)#.head(320)
+            self.img_label_file = pd.read_csv(f, header=None)#.head(80)
         self.label_dict = {'A': 0,
                       'B': 1,
                       'C': 2}
